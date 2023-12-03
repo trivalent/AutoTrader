@@ -14,3 +14,12 @@ CCXT:EXCHANGE:
 dYdX:
   ETH_ADDRESS: "0xxxxx"
   ETH_PRIV_KEY: "xxxxx"
+
+finvasia:
+  #provide the TOTP key for your account for Auto-Login process
+  TOTP_KEY: "L5D7ABHZH2XG7BB4MQ5EG632GRK3P66H"
+  TOTP_INTERVAL: 30
+  #your API Key obtained from Shoonya/Finvasia
+  API_KEY: ""
+  USER_NAME: ""
+  PASSWORD: ""
