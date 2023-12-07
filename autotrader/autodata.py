@@ -28,11 +28,11 @@ class AutoData:
     """
 
     def __init__(
-        self,
-        data_config: dict = None,
-        allow_dancing_bears: bool = False,
-        home_currency: str = None,
-        **kwargs,
+            self,
+            data_config: dict = None,
+            allow_dancing_bears: bool = False,
+            home_currency: str = None,
+            **kwargs,
     ) -> None:
         """Instantiates AutoData.
 
@@ -182,6 +182,9 @@ class AutoData:
                         + "the Yahoo Finance data feed."
                     )
 
+            elif data_config["data_source"].lower() == "finvasia":
+                self.api = data_config["finvasia_api"]
+
             elif data_config["data_source"].lower() == "local":
                 configure_local_feed(data_config)
 
@@ -203,14 +206,14 @@ class AutoData:
         return f"AutoData ({feed_str} feed)"
 
     def fetch(
-        self,
-        instrument: str,
-        granularity: str = None,
-        count: int = None,
-        start_time: datetime = None,
-        end_time: datetime = None,
-        *args,
-        **kwargs,
+            self,
+            instrument: str,
+            granularity: str = None,
+            count: int = None,
+            start_time: datetime = None,
+            end_time: datetime = None,
+            *args,
+            **kwargs,
     ) -> pd.DataFrame:
         """Unified OHLC data retrieval api.
 
@@ -306,12 +309,12 @@ class AutoData:
         return trades
 
     def _oanda(
-        self,
-        instrument: str,
-        granularity: str,
-        count: int = None,
-        start_time: datetime = None,
-        end_time: datetime = None,
+            self,
+            instrument: str,
+            granularity: str,
+            count: int = None,
+            start_time: datetime = None,
+            end_time: datetime = None,
     ) -> pd.DataFrame:
         """Retrieves historical price data of a instrument from Oanda v20 API.
 
@@ -509,13 +512,13 @@ class AutoData:
         return data
 
     def _oanda_quote_data(
-        self,
-        data: pd.DataFrame,
-        pair: str,
-        granularity: str,
-        start_time: datetime,
-        end_time: datetime,
-        count: int = None,
+            self,
+            data: pd.DataFrame,
+            pair: str,
+            granularity: str,
+            start_time: datetime,
+            end_time: datetime,
+            count: int = None,
     ):
         """Function to retrieve price conversion data."""
         gran_map = {
@@ -586,7 +589,7 @@ class AutoData:
                                 count=count,
                             )
                             quote_data = (
-                                1 / inverse_quote_data[["Open", "High", "Low", "Close"]]
+                                    1 / inverse_quote_data[["Open", "High", "Low", "Close"]]
                             )
 
                         except:
@@ -705,12 +708,12 @@ class AutoData:
         return my_int
 
     def _yahoo(
-        self,
-        instrument: str,
-        granularity: str = None,
-        count: int = None,
-        start_time: str = None,
-        end_time: str = None,
+            self,
+            instrument: str,
+            granularity: str = None,
+            count: int = None,
+            start_time: str = None,
+            end_time: str = None,
     ) -> pd.DataFrame:
         """Retrieves historical price data from yahoo finance.
 
@@ -790,13 +793,13 @@ class AutoData:
         raise Exception("Orderbook data is not available from Yahoo Finance.")
 
     def _yahoo_quote_data(
-        self,
-        data: pd.DataFrame,
-        pair: str,
-        interval: str,
-        from_date: datetime,
-        to_date: datetime,
-        count: int = None,
+            self,
+            data: pd.DataFrame,
+            pair: str,
+            interval: str,
+            from_date: datetime,
+            to_date: datetime,
+            count: int = None,
     ):
         """Returns nominal price data - quote conversion not supported for
         Yahoo finance API.
@@ -811,16 +814,16 @@ class AutoData:
             raise ConnectionError("No active connection to IB.")
 
     def _ib(
-        self,
-        instrument: str,
-        granularity: str,
-        count: int,
-        start_time: datetime = None,
-        end_time: datetime = None,
-        order: Order = None,
-        durationStr: str = "10 mins",
-        *args,
-        **kwargs,
+            self,
+            instrument: str,
+            granularity: str,
+            count: int,
+            start_time: datetime = None,
+            end_time: datetime = None,
+            order: Order = None,
+            durationStr: str = "10 mins",
+            *args,
+            **kwargs,
     ) -> pd.DataFrame:
         """Fetches data from IB.
 
@@ -961,13 +964,13 @@ class AutoData:
         return price
 
     def _local(
-        self,
-        instrument: str,
-        start_time: Union[str, datetime] = None,
-        end_time: Union[str, datetime] = None,
-        utc: bool = True,
-        *args,
-        **kwargs,
+            self,
+            instrument: str,
+            start_time: Union[str, datetime] = None,
+            end_time: Union[str, datetime] = None,
+            utc: bool = True,
+            *args,
+            **kwargs,
     ) -> pd.DataFrame:
         """Reads and returns local price data.
 
@@ -1060,20 +1063,20 @@ class AutoData:
         return orderbook
 
     def _local_quote_data(
-        self,
-        data: pd.DataFrame,
-        pair: str,
-        granularity: str,
-        start_time: datetime,
-        end_time: datetime,
-        count: int = None,
+            self,
+            data: pd.DataFrame,
+            pair: str,
+            granularity: str,
+            start_time: datetime,
+            end_time: datetime,
+            count: int = None,
     ):
         """Returns the original price data for a local data feed."""
         return data
 
     @staticmethod
     def _check_data_period(
-        data: pd.DataFrame, start_date: datetime, end_date: datetime
+            data: pd.DataFrame, start_date: datetime, end_date: datetime
     ) -> pd.DataFrame:
         """Checks and returns the dataset matching the backtest start and
         end dates (as close as possible).
@@ -1081,13 +1084,13 @@ class AutoData:
         return data[(data.index >= start_date) & (data.index <= end_date)]
 
     def _ccxt(
-        self,
-        instrument: str,
-        granularity: str,
-        count: int = None,
-        start_time: datetime = None,
-        end_time: datetime = None,
-        **kwargs,
+            self,
+            instrument: str,
+            granularity: str,
+            count: int = None,
+            start_time: datetime = None,
+            end_time: datetime = None,
+            **kwargs,
     ) -> pd.DataFrame:
         """Retrieves historical price data of a instrument from an exchange
         instance of the CCXT package.
@@ -1205,13 +1208,13 @@ class AutoData:
         return data
 
     def _ccxt_quote_data(
-        self,
-        data: pd.DataFrame,
-        pair: str = None,
-        granularity: str = None,
-        start_time: datetime = None,
-        end_time: datetime = None,
-        count: int = None,
+            self,
+            data: pd.DataFrame,
+            pair: str = None,
+            granularity: str = None,
+            start_time: datetime = None,
+            end_time: datetime = None,
+            count: int = None,
     ):
         """Returns the original price data for a CCXT data feed."""
         return data
@@ -1260,12 +1263,12 @@ class AutoData:
         return fr_dict
 
     def _ccxt_funding_history(
-        self,
-        instrument: str,
-        count: int = None,
-        start_time: datetime = None,
-        end_time: datetime = None,
-        params: dict = {},
+            self,
+            instrument: str,
+            count: int = None,
+            start_time: datetime = None,
+            end_time: datetime = None,
+            params: dict = {},
     ):
         """Fetches the funding rate history."""
 
@@ -1339,14 +1342,14 @@ class AutoData:
         return rate_hist
 
     def _dydx(
-        self,
-        instrument: str,
-        granularity: str,
-        count: int = None,
-        start_time: datetime = None,
-        end_time: datetime = None,
-        *args,
-        **kwargs,
+            self,
+            instrument: str,
+            granularity: str,
+            count: int = None,
+            start_time: datetime = None,
+            end_time: datetime = None,
+            *args,
+            **kwargs,
     ) -> pd.DataFrame:
         """Retrieves historical price data of a instrument from dYdX.
 
@@ -1488,13 +1491,13 @@ class AutoData:
         return data
 
     def _dydx_quote_data(
-        self,
-        data: pd.DataFrame,
-        pair: str,
-        granularity: str,
-        start_time: datetime,
-        end_time: datetime,
-        count: int = None,
+            self,
+            data: pd.DataFrame,
+            pair: str,
+            granularity: str,
+            start_time: datetime,
+            end_time: datetime,
+            count: int = None,
     ):
         """Returns the original price data for a dYdX data feed."""
         return data
@@ -1531,4 +1534,107 @@ class AutoData:
         return None
 
     def _none_orderbook(self, *args, **kwargs):
+        return None
+
+    def _finvasia(self,
+                  instrument: str,
+                  granularity: str,
+                  count: int = None,
+                  start_time: datetime = None,
+                  end_time: datetime = None,
+                  *args,
+                  **kwargs, ) -> pd.DataFrame:
+        """Retrieves historical price data of a instrument from dYdX.
+
+                Parameters
+                ----------
+                instrument : str
+                    The instrument/market to fetch data for.
+                granularity : str
+                    The candlestick granularity (1DAY, 4HOURS, 1HOUR, 30MINS, 15MINS,
+                                                 5MINS, or 1MIN).
+                count : int, optional
+                    The number of candles to fetch (maximum of 100). The default is None.
+                start_time : datetime, optional
+                    The data start time. The default is None.
+                end_time : datetime, optional
+                    The data end time. The default is None.
+                Returns
+                -------
+                data : DataFrame
+                    The price data, as an OHLCV DataFrame.
+                """
+        requestGranularity = pd.Timedelta(granularity).total_seconds()
+
+        # Finvasia API doesn't support second wise data. A minimum is 1 min
+        if requestGranularity < 60:
+            raise AttributeError("Minimum supported granularity is 1 Min")
+
+        requestGranularity = requestGranularity / 60  # convert to minutes
+        # If the request is for hourly data : 1hr, 2hr, 4hr
+        if requestGranularity in (60, 120, 240) or requestGranularity in range(1, 60):
+            response = self.api.finvasiaAPI.get_time_price_series('NSE', instrument,
+                                                                  starttime=start_time,
+                                                                  endtime=end_time,
+                                                                  interval=requestGranularity)
+        elif requestGranularity > 479:  # requesting daily data:
+            def fix(data):
+                import json
+                return json.loads(data)
+
+            response = self.api.finvasiaAPI.get_daily_price_series('NSE', instrument, startdate=start_time,
+                                                                   enddate=end_time)
+            response = [fix(x) for x in response]
+        else:
+            response = []
+
+        ret = pd.DataFrame(response)
+        return ret[['into', 'inth', 'intl', 'intc', 'intv']]
+
+    def _finvasia_quote_data(
+            self,
+            data: pd.DataFrame,
+            pair: str = None,
+            granularity: str = None,
+            start_time: datetime = None,
+            end_time: datetime = None,
+            count: int = None,
+    ):
+        """Returns the original price data for a Finvasia data feed."""
+        return data
+
+    def _finvasia_price_update_callback(self, tick_data):
+        self.live_price = {
+            tick_data['tk']: {'ask': tick_data['sp1'], 'bid': tick_data['bp1'], 'negativeHCF': 1, 'positiveHCF': 1}}
+
+    def _finvasia_liveprice(self, order: Order, snapshot: bool = False, **kwargs) -> dict:
+        """Returns current price (bid+ask) and home conversion factors.
+
+        Parameters
+        ----------
+        order: Order
+            The AutoTrader Order.
+        snapshot : bool, optional
+            Request a snapshot of the price. The default is False.
+
+        Returns
+        -------
+        dict
+            A dictionary containing the bid and ask prices.
+        """
+        # check if there is already a token available
+        if self.tokens[order.instrument] is not None:
+            return self.live_price[self.tokens[order.instrument]]
+
+        # else get the token for this instrument first
+        response = self.api.finvasiaAPI.searchscrip(exchange=order.exchange, searchtext=order.instrument)
+        token = response[0]['token']
+        # save this token
+        self.tokens[order.instrument] = token
+        # subscribe for this token
+        self.api.finvasiaAPI.subscribe(f'{order.exchange}|{token}')
+        time.sleep(5)
+        return self.live_price[self.tokens[order.instrument]]
+
+    def _finvasia_orderbook(self, *args, **kwargs):
         return None

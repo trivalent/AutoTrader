@@ -1,3 +1,4 @@
+from autotrader import AutoData
 from autotrader.brokers.broker_utils import BrokerUtils
 from autotrader.brokers.broker import AbstractBroker
 from autotrader.brokers.finvasia.utils import Utils
@@ -9,6 +10,8 @@ class Broker(AbstractBroker):
         self.utils = Utils()
         if not self.utils.doLogin():
             raise Exception("Unable to Login, please check your credentials")
+        self.autodata = AutoData(data_source="finvasia", finvasia_api=self.utils,
+                                 live_price=None, tokens=None)
 
     def __repr__(self):
         return "AutoTrader-Finvasia Broker Interface"
