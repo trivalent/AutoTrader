@@ -30,8 +30,9 @@ class Utils(BrokerUtils, NorenApi):
         self.imei = "XG7BB4MQ5EG6"
 
     def doLogin(self) -> bool:
-        login = self.finvasiaAPI.login(self.userName, self.password, pyotp.TOTP(self.totpKey, interval=self.totpInterval).now(),
-                                       self.apiKey, self.imei)
+        login = self.finvasiaAPI.login(userid=self.userName, password=self.password,
+                                       twoFA=pyotp.TOTP(self.totpKey, interval=self.totpInterval).now(),
+                                       vendor_code=self.vendorCode, api_secret=self.apiKey, imei=self.imei)
         return login['ret'] == "Ok"
 
     def getNav(self) -> float:
