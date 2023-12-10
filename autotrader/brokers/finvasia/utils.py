@@ -33,7 +33,7 @@ class Utils(BrokerUtils, NorenApi):
         login = self.finvasiaAPI.login(userid=self.userName, password=self.password,
                                        twoFA=pyotp.TOTP(self.totpKey, interval=self.totpInterval).now(),
                                        vendor_code=self.vendorCode, api_secret=self.apiKey, imei=self.imei)
-        return login['ret'] == "Ok"
+        return login['stat'] == "Ok"
 
     def getNav(self) -> float:
         """Fetch all the holding and calculate the Nav"""
