@@ -241,7 +241,7 @@ def get_data_config(feed: str, global_config: dict = None, **kwargs) -> dict:
         feed, exchange = feed.lower().split(":")
 
     # Check feed
-    supported_feeds = ["oanda", "ib", "ccxt", "dydx", "yahoo", "local", "none"]
+    supported_feeds = ["oanda", "ib", "ccxt", "dydx", "yahoo", "finvasia", "local", "none"]
     if feed.lower() not in supported_feeds:
         raise Exception(f"Unsupported data feed: '{feed}'")
 
