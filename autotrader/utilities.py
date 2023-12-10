@@ -215,11 +215,11 @@ def get_broker_config(
             config = {
                 "data_source": "finvasia",
                 "exchange": 'NSE',    # we are currently operating on NSE only
-                "API_KEY": config_data['finvasia']['API_KEY'],
-                "USER_NAME": config_data['finvasia']['USER_NAME'],
-                "PASSWORD": config_data['finvasia']['PASSWORD'],
-                "TOTP_KEY": config_data['finvasia']['TOTP_KEY'],
-                "TOTP_INTERVAL": config_data['finvasia']['TOTP_INTERVAL'],
+                "API_KEY": config_data['API_KEY'],
+                "USER_NAME": config_data['USER_NAME'],
+                "PASSWORD": config_data['PASSWORD'],
+                "TOTP_KEY": config_data['TOTP_KEY'],
+                "TOTP_INTERVAL": config_data['TOTP_INTERVAL'],
             }
         else:
             raise Exception(f"No configuration available for {broker}.")

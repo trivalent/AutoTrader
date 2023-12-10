@@ -16,10 +16,10 @@ class Utils(BrokerUtils, NorenApi):
         # API_KEY: ""
         # USER_NAME: ""
         # PASSWORD: ""
-        if "config" not in kwargs:
+        if "global_config" in kwargs:
             finvasiaConfig = kwargs['global_config']['finvasia']
         else:
-            finvasiaConfig = kwargs['config']
+            finvasiaConfig = kwargs
 
         self.totpKey = finvasiaConfig['TOTP_KEY']
         self.totpInterval = finvasiaConfig['TOTP_INTERVAL']
