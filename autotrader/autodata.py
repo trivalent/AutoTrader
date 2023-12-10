@@ -1580,8 +1580,8 @@ class AutoData:
         # If the request is for hourly data : 1hr, 2hr, 4hr
         if requestGranularity in (60, 120, 240) or requestGranularity in range(1, 60):
             response = self.api.finvasiaAPI.get_time_price_series('NSE', instrument,
-                                                                  starttime=start_time,
-                                                                  endtime=end_time,
+                                                                  starttime=start_time.timestamp(),
+                                                                  endtime=end_time.timestamp(),
                                                                   interval=requestGranularity)
         elif requestGranularity > 479:  # requesting daily data:
             def fix(data):
@@ -1595,7 +1595,11 @@ class AutoData:
             response = []
 
         ret = pd.DataFrame(response)
-        return ret[['into', 'inth', 'intl', 'intc', 'intv']]
+        ret = ret[['time', 'into', 'inth', 'intl', 'intc', 'intv']]
+        ret.set_index('time', inplace=True)
+        ret.sort_index(ascending=True)
+        ret = ret.rename(columns={'into': 'open', 'inth': 'high', 'intl': 'low', 'intc': 'close', 'intv': 'volume'})
+        return ret
 
     def _finvasia_quote_data(
             self,
