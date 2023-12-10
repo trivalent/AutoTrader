@@ -253,7 +253,7 @@ def get_data_config(feed: str, global_config: dict = None, **kwargs) -> dict:
             pass
 
     # Check for required authentication
-    auth_feeds = ["oanda", "ib"]
+    auth_feeds = ["oanda", "ib", "finvasia"]
     if feed.lower() in auth_feeds and global_config is None:
         raise Exception(
             f"Data feed '{feed}' requires authentication. "
@@ -328,6 +328,22 @@ def get_data_config(feed: str, global_config: dict = None, **kwargs) -> dict:
             # No global config available, just set exchange
             config["exchange"] = exchange
 
+    elif feed.lower() == "finvasia":
+        # Try add auth with global config
+        if global_config is not None:
+            # Global config is available
+            try:
+                environment = (
+                    kwargs["environment"] if "environment" in kwargs else "paper"
+                )
+                config = get_broker_config(
+                    broker=f"{feed.lower()}",
+                    global_config=global_config,
+                    environment=environment,
+                )
+            except:
+                # Didn't work, just set exchange, default for
+                config["exchange"] = 'NSE'
     return config
 
 
