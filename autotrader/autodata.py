@@ -186,7 +186,7 @@ class AutoData:
                 if "finvasia_api" in data_config:
                     self.api = data_config["finvasia_api"]
                 else:
-                    from brokers import finvasia
+                    from autotrader.brokers import finvasia
                     self.api = finvasia.Utils(**data_config)
                     if not self.api.finvasiaAPI.doLogin():
                         raise Exception("Can't Login to Finvasia, Please check your credentials")

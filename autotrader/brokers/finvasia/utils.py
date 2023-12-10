@@ -16,7 +16,11 @@ class Utils(BrokerUtils, NorenApi):
         # API_KEY: ""
         # USER_NAME: ""
         # PASSWORD: ""
-        finvasiaConfig = kwargs['config']
+        if "config" not in kwargs:
+            finvasiaConfig = kwargs['global_config']['finvasia']
+        else:
+            finvasiaConfig = kwargs['config']
+
         self.totpKey = finvasiaConfig['TOTP_KEY']
         self.totpInterval = finvasiaConfig['TOTP_INTERVAL']
         self.apiKey = finvasiaConfig['API_KEY']
@@ -26,7 +30,7 @@ class Utils(BrokerUtils, NorenApi):
         self.imei = "XG7BB4MQ5EG6"
 
     def doLogin(self) -> bool:
-        login = self.finvasiaAPI.login(self.userName, self.password, pyotp.TOTP(self.totpKey, self.totpInterval).now(),
+        login = self.finvasiaAPI.login(self.userName, self.password, pyotp.TOTP(self.totpKey, interval=self.totpInterval).now(),
                                        self.apiKey, self.imei)
         return login['ret'] == "Ok"
 
@@ -174,4 +178,3 @@ class Utils(BrokerUtils, NorenApi):
             finOrder['price'] = order.order_price
 
         return finOrder
-
