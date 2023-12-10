@@ -183,7 +183,13 @@ class AutoData:
                     )
 
             elif data_config["data_source"].lower() == "finvasia":
-                self.api = data_config["finvasia_api"]
+                if "finvasia_api" in data_config:
+                    self.api = data_config["finvasia_api"]
+                else:
+                    from brokers import finvasia
+                    self.api = finvasia.Utils(**data_config)
+                    if not self.api.finvasiaAPI.doLogin():
+                        raise Exception("Can't Login to Finvasia, Please check your credentials")
 
             elif data_config["data_source"].lower() == "local":
                 configure_local_feed(data_config)
