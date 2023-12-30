@@ -1598,6 +1598,7 @@ class AutoData:
 
         ret = pd.DataFrame(response)
         ret = ret[['time', 'into', 'inth', 'intl', 'intc', 'intv']]
+        ret['time'] = pd.to_datetime(ret['time'], utc=True)
         ret.set_index('time', inplace=True)
         ret.sort_index(ascending=True)
         ret = ret.rename(columns={'into': 'open', 'inth': 'high', 'intl': 'low', 'intc': 'close', 'intv': 'volume'})
