@@ -1598,11 +1598,11 @@ class AutoData:
 
         ret = pd.DataFrame(response)
         ret = ret[['time', 'into', 'inth', 'intl', 'intc', 'intv']]
-        ret['time'] = pd.to_datetime(ret['time'], utc=True)
+        ret = ret.astype({'into': 'float', 'inth': 'float', 'intl': 'float', 'intv': 'float', 'intc': 'float'})
+        ret['time'] = pd.to_datetime(ret['time'], utc=True, format="%d-%m-%Y %H:%M:%S")
         ret.set_index('time', inplace=True)
-        ret.sort_index(ascending=True)
-        ret = ret.rename(columns={'into': 'open', 'inth': 'high', 'intl': 'low', 'intc': 'close', 'intv': 'volume'})
-        return ret
+        ret.sort_index(ascending=True, inplace=True)
+        return ret.rename(columns={'into': 'Open', 'inth': 'High', 'intl': 'Low', 'intc': 'Close', 'intv': 'Volume'})
 
     def _finvasia_quote_data(
             self,
