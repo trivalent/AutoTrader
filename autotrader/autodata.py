@@ -1583,16 +1583,18 @@ class AutoData:
                                                                   starttime=start_time.timestamp(),
                                                                   endtime=end_time.timestamp(),
                                                                   interval=requestGranularity)
-        elif requestGranularity > 479:  # requesting daily data:
-            def fix(data):
-                import json
-                return json.loads(data)
-
-            response = self.api.finvasiaAPI.get_daily_price_series('NSE', instrument, startdate=start_time,
-                                                                   enddate=end_time)
-            response = [fix(x) for x in response]
         else:
+            print(f"Error:: Can't fetch data for Request Granularity: ${requestGranularity}")
             response = []
+
+        # elif requestGranularity > 479:  # requesting daily data:
+        #     def fix(data):
+        #         import json
+        #         return json.loads(data)
+        #
+        #     response = self.api.finvasiaAPI.get_daily_price_series('NSE', instrument, startdate=start_time,
+        #                                                            enddate=end_time)
+        #     response = [fix(x) for x in response]
 
         ret = pd.DataFrame(response)
         ret = ret[['time', 'into', 'inth', 'intl', 'intc', 'intv']]
