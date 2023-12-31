@@ -7,11 +7,20 @@ from autotrader.brokers.trading import Order, IsolatedPosition, Position
 
 class Broker(AbstractBroker):
     def __init__(self, finvasiaConfig: dict, utils: BrokerUtils = None) -> None:
-        self.utils = Utils()
+
+        # During live execution, the utils are already initialized. So just use that.
+        if utils is not None:
+            self.utils = utils
+        else:
+            self.utils = Utils()
+
+        # we are not able to login, we can't use this.
         if not self.utils.doLogin():
             raise Exception("Unable to Login, please check your credentials")
+
+        # Create autodata instance for this broker
         self.autodata = AutoData(data_source="finvasia", finvasia_api=self.utils,
-                                 live_price=None, tokens=None)
+                 live_price=None, tokens=None)
 
     def __repr__(self):
         return "AutoTrader-Finvasia Broker Interface"

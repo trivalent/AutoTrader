@@ -1570,6 +1570,7 @@ class AutoData:
                 data : DataFrame
                     The price data, as an OHLCV DataFrame.
                 """
+
         requestGranularity = pd.Timedelta(granularity).total_seconds()
 
         # Finvasia API doesn't support second wise data. A minimum is 1 min
@@ -1577,6 +1578,14 @@ class AutoData:
             raise AttributeError("Minimum supported granularity is 1 Min")
 
         requestGranularity = requestGranularity / 60  # convert to minutes
+
+        # if we have count supplied and start_time and end_time is not specified,
+        # we just fetch the data for last 300 days
+        if start_time is None:
+            if end_time is None:
+                end_time = datetime.now()
+            start_time = end_time - timedelta(days=300)
+
         # If the request is for hourly data : 1hr, 2hr, 4hr
         if requestGranularity in (60, 120, 240) or requestGranularity in range(1, 60):
             response = self.api.finvasiaAPI.get_time_price_series('NSE', instrument,
