@@ -20,11 +20,7 @@
   <a href="https://pepy.tech/project/autotrader">
     <img src="https://pepy.tech/badge/autotrader/month" alt="Monthly downloads" >
   </a>
-  
-  <a>
-    <img src="https://github.com/kieran-mackle/AutoTrader/actions/workflows/tests.yml/badge.svg" alt="Build Status" >
-  </a>
-  
+
   <a href='https://autotrader.readthedocs.io/en/latest/?badge=latest'>
     <img src='https://readthedocs.org/projects/autotrader/badge/?version=latest' alt='Documentation Status' />
   </a>
@@ -36,13 +32,13 @@
 </p>
 
 
-
 AutoTrader is Python-based platform intended to help in the development, optimisation and deployment of automated trading systems. 
 A basic level of experience with Python is recommended for using AutoTrader, but the [docs](https://autotrader.readthedocs.io/en/latest/) 
 aim to make using it as easy as possible with detailed tutorials and documentation.
 
 ## Latest News
-- Version 0.7 has been released, adding integrations with [CCXT](https://github.com/ccxt/ccxt) and [dYdX](https://dydx.exchange/) crypto exchanges. Many more powerful upgrades too.
+- [CryptoBots](https://github.com/kieran-mackle/cryptobots) has been released along with version `1.0.0`, offering ready-to-trade crypto strategies from the command line
+- Version 0.7 has been released, adding integrations with [CCXT](https://github.com/ccxt/ccxt) crypto exchanges. Many more powerful upgrades too.
 - AutoTrader has been featured in GitClone's recent article, [*Top Crypto Trader Open-Source Projects on Github*](https://gitclone.dev/top-crypto-trader-open-source-projects-on-github/).
 
 ## Features
@@ -66,7 +62,6 @@ more than enough to build a profitable trading system.
 | -------- | ------------- | ------------------ |
 | [Oanda](https://www.oanda.com/)    | Forex CFDs    | Complete |
 | [Interactive Brokers](https://www.interactivebrokers.com/en/home.php) | Many | In progress |
-| [dYdX](https://dydx.exchange/) | Cryptocurrencies | Complete |
 | [CCXT](https://github.com/ccxt/ccxt) | Cryptocurrencies | In progress |
 
 <p align="right">[<a href="#readme-top">back to top</a>]</p>
@@ -196,8 +191,6 @@ sphinx-autobuild source/ build/html --open-browser
 AutoTrader is licensed under the [GNU General Public License v3.0](https://www.gnu.org/licenses/gpl-3.0.en.html).
 
 ### Disclaimer
-This platform is currently under heavy development and should not be considered stable for livetrading until version 1.0.0 is released.
-
 Never risk money you cannot afford to lose. Always test your strategies on a paper trading account before taking it live.
 
 <p align="right">[<a href="#readme-top">back to top</a>]</p>
