@@ -46,6 +46,7 @@ class Broker(Broker):
         utils : Utils, optional
             Broker utilities class instance. The default is None.
         """
+        print(config)
         self.host = config["host"] if "host" in config else "127.0.0.1"
         self.port = config["port"] if "port" in config else 7497
         self.client_id = (

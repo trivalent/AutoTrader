@@ -103,7 +103,7 @@ def get_broker_config(
         else:
             broker_key = broker
 
-        supported_brokers = ["oanda", "ib", "ccxt", "virtual"]
+        supported_brokers = ["oanda", "ib", "ccxt", "virtual", "finvasia"]
         if broker.lower() not in supported_brokers:
             raise Exception(f"Unsupported broker: '{broker}'")
 
@@ -202,6 +202,17 @@ def get_broker_config(
 
         elif broker.lower() == "virtual":
             config = {}
+
+        elif broker.lower() == "finvasia":
+            config = {
+                "data_source": "finvasia",
+                "exchange": ["NSE", "NFO"],  # we are currently operating on NSE only
+                "API_KEY": global_config[broker_key.lower()]['API_KEY'],
+                "USER_NAME": global_config[broker_key.lower()]['USER_NAME'],
+                "PASSWORD": global_config[broker_key.lower()]['PASSWORD'],
+                "TOTP_KEY": global_config[broker_key.lower()]['TOTP_KEY'],
+                "TOTP_INTERVAL": global_config[broker_key.lower()]['TOTP_INTERVAL'],
+            }
 
         else:
             raise Exception(f"No configuration available for {broker}.")

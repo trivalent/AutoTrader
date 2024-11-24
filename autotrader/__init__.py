@@ -33,5 +33,7 @@ except:
 # Virtual broker
 from .brokers.virtual import Broker as VirtualBroker
 
+from .brokers.finvasia import Broker as Finvasia
+
 # Define version number
-__version__ = "1.1.2"
+__version__ = "1.1.3"
