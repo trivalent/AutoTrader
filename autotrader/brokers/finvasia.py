@@ -304,7 +304,7 @@ class Broker(Broker):
                                                       endtime=to_time, interval=granularity)
 
             # If the request is rejected, max candles likely exceeded
-            if response is None or response['stat'] == 'Not_Ok':
+            if response is None:
                 throw_error("Unable to fetch the candle data")
             else:
                 data = self._response_to_df(response)
@@ -343,11 +343,11 @@ class Broker(Broker):
 
         dataframe = pd.DataFrame(
             {
-                "Open": candles['into'],
-                "High": candles['inth'],
-                "Low": candles['intl'],
-                "Close": candles['intc'],
-                "Volume": candles['v'],
+                "Open": pd.to_numeric(candles['into']),
+                "High": pd.to_numeric(candles['inth']),
+                "Low": pd.to_numeric(candles['intl']),
+                "Close": pd.to_numeric(candles['intc']),
+                "Volume": pd.to_numeric(candles['v']),
             }
         )
         dataframe.index = pd.to_datetime(candles['time'])
