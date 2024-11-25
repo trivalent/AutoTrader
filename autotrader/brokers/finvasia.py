@@ -250,7 +250,7 @@ class Broker(Broker):
         elif granularity >60:
             granularity = str(int(granularity/60))
 
-        self._logger.debug(f"Getting candle data for {instrument} with timeframe = {granularity} ")
+        self._logger.info(f"Getting candle data for {instrument} with timeframe = {granularity} ")
 
         if count is not None:
             # either of count, start_time+count, end_time+count (or start_time+end_time+count)
@@ -352,6 +352,7 @@ class Broker(Broker):
         )
         dataframe.index = pd.to_datetime(candles['time'])
         dataframe.drop_duplicates(inplace=True)
+        dataframe.sort_index(ascending=True, inplace=True)
 
         return dataframe
 
