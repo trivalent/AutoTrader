@@ -294,10 +294,14 @@ class Broker(Broker):
         else:
             # count is None
             # Assume that both start_time and end_time have been specified.
-            from_time = start_time.timestamp()
-            to_time = end_time.timestamp()
+            from_time = None
+            to_time= None
+            if start_time is not None:
+                from_time = start_time.timestamp()
+            if end_time is not None:
+                to_time = end_time.timestamp()
 
-            self._logger.debug(f"Getting candle data for {instrument} timeframe = {granularity} from = {start_time} to = {end_time}")
+            self._logger.info(f"Getting candle data for {instrument} timeframe = {granularity} from = {start_time} to = {end_time}")
             # try to get data
             response = self.api.get_time_price_series( exchange='NSE', token=str(instrument),
                                                       starttime=from_time,
