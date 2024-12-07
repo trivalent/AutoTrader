@@ -1,17 +1,19 @@
-import os
-import sys
-import yaml
-import time
-import pickle
 import logging
-import autotrader
+import os
+import pickle
+import sys
+import time
+from abc import abstractmethod
+from datetime import datetime, timedelta
+from typing import Union, Optional
+
 import numpy as np
 import pandas as pd
+import yaml
 from art import tprint
-from abc import abstractmethod
-from typing import Union, Optional
-from datetime import datetime, timedelta
 from prometheus_client import start_http_server, Gauge
+
+import autotrader
 from autotrader.brokers.broker import AbstractBroker, Broker
 
 try:
@@ -63,9 +65,9 @@ def print_banner():
 
 
 def get_broker_config(
-    broker: str,
-    global_config: Optional[dict] = None,
-    environment: Optional[str] = "paper",
+        broker: str,
+        global_config: Optional[dict] = None,
+        environment: Optional[str] = "paper",
 ) -> dict:
     """Returns a broker configuration dictionary.
 
@@ -103,7 +105,7 @@ def get_broker_config(
         else:
             broker_key = broker
 
-        supported_brokers = ["oanda", "ib", "ccxt", "virtual", "finvasia"]
+        supported_brokers = ["oanda", "ib", "ccxt", "virtual", "finvasia", "deltaIndia"]
         if broker.lower() not in supported_brokers:
             raise Exception(f"Unsupported broker: '{broker}'")
 
@@ -213,7 +215,13 @@ def get_broker_config(
                 "TOTP_KEY": global_config[broker_key.lower()]['TOTP_KEY'],
                 "TOTP_INTERVAL": global_config[broker_key.lower()]['TOTP_INTERVAL'],
             }
-
+        elif broker.lower() == "deltaIndia":
+            config={
+                "data_source": "deltaIndia",
+                "api_key":global_config[broker_key.lower()]['api_key'],
+                "secret":global_config[broker_key.lower()]['secret'],
+                "base_currency": "USDT",
+            }
         else:
             raise Exception(f"No configuration available for {broker}.")
 
@@ -398,12 +406,12 @@ class CustomLoggingFormatter(logging.Formatter):
 
 
 def get_logger(
-    name: str,
-    stdout: Optional[bool] = True,
-    stdout_level: Optional[Union[int, str]] = logging.INFO,
-    file: Optional[bool] = False,
-    file_level: Optional[Union[int, str]] = logging.INFO,
-    log_dir: Optional[str] = "autotrader_logs",
+        name: str,
+        stdout: Optional[bool] = True,
+        stdout_level: Optional[Union[int, str]] = logging.INFO,
+        file: Optional[bool] = False,
+        file_level: Optional[Union[int, str]] = logging.INFO,
+        log_dir: Optional[str] = "autotrader_logs",
 ):
     """Get (or create) a logger."""
     # Create logger
@@ -470,11 +478,11 @@ class TradeAnalysis:
     """
 
     def __init__(
-        self,
-        broker,
-        broker_histories: dict,
-        instrument: str = None,
-        price_history: pd.DataFrame = None,
+            self,
+            broker,
+            broker_histories: dict,
+            instrument: str = None,
+            price_history: pd.DataFrame = None,
     ):
         # Meta data
         self.brokers_used = None
@@ -500,10 +508,10 @@ class TradeAnalysis:
         return "AutoTrader Trading Results"
 
     def analyse_account(
-        self,
-        broker,
-        broker_histories: dict,
-        instrument: Optional[str] = None,
+            self,
+            broker,
+            broker_histories: dict,
+            instrument: Optional[str] = None,
     ) -> None:
         """Analyses trade account and creates summary of key details."""
         if not isinstance(broker, dict):
@@ -545,7 +553,7 @@ class TradeAnalysis:
 
             # Calculate drawdown
             account_history["drawdown"] = (
-                account_history.NAV / account_history.NAV.cummax() - 1
+                    account_history.NAV / account_history.NAV.cummax() - 1
             )
 
             # Save results for this broker instance
@@ -579,8 +587,8 @@ class TradeAnalysis:
 
     @staticmethod
     def create_position_history(
-        trade_history: pd.DataFrame,
-        account_history: pd.DataFrame,
+            trade_history: pd.DataFrame,
+            account_history: pd.DataFrame,
     ) -> pd.DataFrame:
         """Creates a history of positions held, recording number of units held
         at each timestamp.
@@ -592,9 +600,9 @@ class TradeAnalysis:
         for instrument in instruments_traded:
             instrument_trade_hist = trade_history[
                 trade_history["instrument"] == instrument
-            ]
+                ]
             directional_trades = (
-                instrument_trade_hist["direction"] * instrument_trade_hist["size"]
+                    instrument_trade_hist["direction"] * instrument_trade_hist["size"]
             )
             net_position_hist = directional_trades.cumsum()
 
@@ -783,10 +791,10 @@ class TradeAnalysis:
 
     @staticmethod
     def create_trade_summary(
-        trades: dict = None,
-        orders: dict = None,
-        instrument: str = None,
-        broker_name: str = None,
+            trades: dict = None,
+            orders: dict = None,
+            instrument: str = None,
+            broker_name: str = None,
     ) -> pd.DataFrame:
         """Creates a summary dataframe for trades and orders."""
         # TODO - review this, could likely be cleaner
@@ -1020,7 +1028,7 @@ class TradeAnalysis:
 
             # Volume traded
             total_volume = (
-                self.trade_history["size"] * self.trade_history["fill_price"]
+                    self.trade_history["size"] * self.trade_history["fill_price"]
             ).values.sum()
 
             # trade_results["all_trades"]["avg_win"] = avg_win
@@ -1144,14 +1152,14 @@ class LocalDataStream(DataStream):
         self._data_path_mapper = config["data_path_mapper"]
 
     def get_candles(
-        self,
-        instrument: str,
-        granularity: str = None,
-        count: int = None,
-        start_time: datetime = None,
-        end_time: datetime = None,
-        *args,
-        **kwargs,
+            self,
+            instrument: str,
+            granularity: str = None,
+            count: int = None,
+            start_time: datetime = None,
+            end_time: datetime = None,
+            *args,
+            **kwargs,
     ) -> pd.DataFrame:
         # TODO - test with portfolio
 
@@ -1195,13 +1203,13 @@ class CcxtDownloadStreamer(DataStream):
         self._cache: dict[str, pd.DataFrame] = {}
 
     def get_candles(
-        self,
-        instrument: str,
-        granularity: str = None,
-        start_time: datetime = None,
-        end_time: datetime = None,
-        *args,
-        **kwargs,
+            self,
+            instrument: str,
+            granularity: str = None,
+            start_time: datetime = None,
+            end_time: datetime = None,
+            *args,
+            **kwargs,
     ) -> pd.DataFrame:
         # TODO - need to check data ranges, same as in virtual broker?
         if instrument not in self._cache:
@@ -1258,11 +1266,11 @@ class TradeWatcher:
 
 class Monitor:
     def __init__(
-        self,
-        config_filepath: Optional[str] = None,
-        config: Optional[dict] = None,
-        *args,
-        **kwargs,
+            self,
+            config_filepath: Optional[str] = None,
+            config: Optional[dict] = None,
+            *args,
+            **kwargs,
     ) -> None:
         """Construct a Monitor instance.
 
@@ -1364,7 +1372,7 @@ class Monitor:
             Monitor.start_server(self.port)
 
     def run(
-        self,
+            self,
     ) -> None:
         """Runs the monitor indefinitely."""
         # Initialise
