@@ -247,12 +247,12 @@ class Broker(Broker):
     def __init__(self, config: dict) -> None:
         """AutoTrader Broker Class constructor."""
         # Unpack config and connect to broker-side API
-        self.exchange: str = 'deltaIndia'
-        # exchange_instance = getattr(ccxt, self.exchange)
-        if "api_key" in config['global_config']['deltaIndia']:
+        self.exchange: str = 'deltaindia'
+        self._current_positions = {'buy': None, 'sell': None}
+        if "api_key" in config:
             ccxt_config = {
-                "apiKey": config['global_config']['deltaIndia']["api_key"],
-                "secret": config['global_config']['deltaIndia']["secret"],
+                "apiKey": config["api_key"],
+                "secret": config["secret"],
             }
         else:
             ccxt_config = {}
@@ -270,6 +270,9 @@ class Broker(Broker):
         if config.get("sandbox_mode", False):
             self.api.set_sandbox_mode(True)
             self._sandbox_str = " (sandbox mode)"
+        elif config.get("environment") != "live":
+            self.api.set_sandbox_mode(True)
+            self._sandbox_str=  " (sandbox mode)"
 
         # Load markets
         self._logger.info(f"Loading instruments for {self.exchange}.")
@@ -332,6 +335,20 @@ class Broker(Broker):
         else:
             # Regular order
             side = "buy" if order.direction > 0 else "sell"
+            reverse = "sell" if side is "buy" else "buy"
+            #check if we already have a position open. In this case, a reverse side order will just close the current
+            # position and will not enter a new position. However, we want to close the previous position and enter
+            # on the reverse side.
+
+            # this doesn't handle error scenario. The bot might ask for a reverse trade, but the trade might not
+            # happen, and we can go in huge losses. The next time similar order goes on, it will just average.
+            # we need to add stop loss order as well which is currently not supported by ccxt.
+            if self._current_positions[reverse] is not None:
+                order.size *=2
+
+            if self._current_positions[side] is not None:
+                self._logger.info(f"A position on {side} side is already pending, skipping this order")
+                return None
 
             # Submit the order
             try:
@@ -343,6 +360,9 @@ class Broker(Broker):
                     price=order.order_limit_price,
                     params=order.ccxt_params,
                 )
+                # only when the order is successful
+                self._current_positions[side] = abs(order.size)
+                self._current_positions[reverse] = None
             except Exception as e:
                 self._logger.error(f"Error placing {order}: {e}")
                 placed_order = e

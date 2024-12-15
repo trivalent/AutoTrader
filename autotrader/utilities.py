@@ -105,7 +105,7 @@ def get_broker_config(
         else:
             broker_key = broker
 
-        supported_brokers = ["oanda", "ib", "ccxt", "virtual", "finvasia", "deltaIndia"]
+        supported_brokers = ["oanda", "ib", "ccxt", "virtual", "finvasia", "deltaindia"]
         if broker.lower() not in supported_brokers:
             raise Exception(f"Unsupported broker: '{broker}'")
 
@@ -215,11 +215,13 @@ def get_broker_config(
                 "TOTP_KEY": global_config[broker_key.lower()]['TOTP_KEY'],
                 "TOTP_INTERVAL": global_config[broker_key.lower()]['TOTP_INTERVAL'],
             }
-        elif broker.lower() == "deltaIndia":
+        elif broker.lower() == "deltaindia":
+            sandbox_mode = False if environment.lower() == "live" else True
             config={
-                "data_source": "deltaIndia",
+                "data_source": "deltaindia",
                 "api_key":global_config[broker_key.lower()]['api_key'],
                 "secret":global_config[broker_key.lower()]['secret'],
+                "sandbox_mode": sandbox_mode,
                 "base_currency": "USDT",
             }
         else:
