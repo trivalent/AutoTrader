@@ -1967,35 +1967,48 @@ class AutoTrader:
             # Trade loop complete - run shutdown routines
             self.shutdown()
 
-    def calculate_sleep_time(self, deploytime, timestep, offset_seconds=4):
+    def calculate_sleep_time(self, deploy_time=None, timestep=timedelta(minutes=1), offset_seconds=4):
         """
-        A utility function to calculate the sleep time to next exact minute. This is added to ensure that the
-        data fetching happens as soon as there is an update so that we do not miss the signal due to a time gap.
-        Parameters
-        ----------
-        deploytime
-        timestep
-        offset_seconds
+        Calculate the time to sleep until the next update time based on the timestep and an optional offset.
 
-        Returns
-        -------
-        Seconds to sleep for the next minute.
+        Parameters:
+            deploy_time (float, optional): A placeholder for deployment timestamp (unused).
+            timestep (timedelta): The interval for updates (e.g., 1min, 5min, 15min, 30min, 1hour).
+            offset_seconds (int): Number of seconds to offset from the next update time (default: 4).
+
+        Returns:
+            float: Sleep time in seconds (non-negative).
         """
-        total_seconds = timestep.total_seconds()
-        current_time = time.time()
-        elapsed_time = current_time - deploytime
+        current_time = datetime.now()
+        current_minute = current_time.minute
+        current_second = current_time.second
 
-        # Calculate the next exact minute
-        now = datetime.now()
-        next_minute = (now + timedelta(minutes=1)).replace(second=0, microsecond=0)
+        # Determine the next update time based on timestep
+        total_seconds = int(timestep.total_seconds())
+        if total_seconds == 60:  # 1-minute interval
+            next_update = current_time + timedelta(minutes=1)
+        elif total_seconds == 300:  # 5-minute interval
+            next_update = current_time + timedelta(minutes=(5 - (current_minute % 5)))
+        elif total_seconds == 900:  # 15-minute interval
+            next_update = current_time + timedelta(minutes=(15 - (current_minute % 15)))
+        elif total_seconds == 1800:  # 30-minute interval
+            if current_minute < 30:
+                next_update = current_time.replace(minute=30, second=0, microsecond=0)
+            else:
+                next_update = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        elif total_seconds == 3600:  # 1-hour interval
+            next_update = current_time.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        else:
+            raise ValueError("Invalid timestep. Supported values are 1min, 5min, 15min, 30min, and 1hour.")
 
-        # Convert the next minute + offset to a timestamp
-        target_time = next_minute + timedelta(seconds=offset_seconds)
-        target_timestamp = target_time.timestamp()
+        # Add the offset
+        next_update += timedelta(seconds=offset_seconds)
 
-        # Calculate sleep time
-        sleep_time = target_timestamp - current_time
-        return max(sleep_time, 0)  # Ensure non-negative sleep time
+        # Calculate sleep time in seconds
+        sleep_time = (next_update - current_time).total_seconds()
+
+        # Ensure non-negative sleep time
+        return max(sleep_time, 0)
 
     def _continuous_trade_loop(self):
         if self._backtest_mode:
@@ -2118,7 +2131,7 @@ class AutoTrader:
                             pickle.dump(self._broker_histories, file)
 
                     # Calculate sleep time
-                    sleep_time = self.calculate_sleep_time(deploy_time, self._timestep)
+                    sleep_time = self.calculate_sleep_time(self._deploy_time, self._timestep)
                     self.logger.debug(
                         f"AutoTrader sleeping until next update at {datetime.now()+timedelta(seconds=sleep_time)}."
                     )
