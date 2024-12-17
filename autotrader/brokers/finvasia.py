@@ -1,13 +1,11 @@
 import time
-import time
 from datetime import datetime, timedelta
 
 import pandas as pd
 from numpy.f2py.auxfuncs import throw_error
-from pandas.core.ops import get_op_result_name
 
 from autotrader.brokers.broker import Broker
-from autotrader.brokers.trading import Order, Position, Trade
+from autotrader.brokers.trading import Order, Position, Trade, OrderBook
 from autotrader.utilities import get_logger
 
 try:
@@ -33,11 +31,11 @@ class Broker(Broker):
 
         print(config)
         self.isLoggedIn = False
-        self.totpKey = config['global_config']['finvasia']['TOTP_KEY']
-        self.totpInterval = config['global_config']['finvasia']['TOTP_INTERVAL']
-        self.apiKey = config['global_config']['finvasia']['API_KEY']
-        self.userName = config['global_config']['finvasia']['USER_NAME']
-        self.password = config['global_config']['finvasia']['PASSWORD']
+        self.totpKey = config['TOTP_KEY']
+        self.totpInterval = config['TOTP_INTERVAL']
+        self.apiKey = config['API_KEY']
+        self.userName = config['USER_NAME']
+        self.password = config['PASSWORD']
         self.vendorCode = self.userName + '_U'
         self.imei = "XG7BB4MQ5EG6"
 
@@ -47,10 +45,12 @@ class Broker(Broker):
         # Assign data broker
         self._data_broker = self
         self.nseData = pd.DataFrame()
+        self.nfoData = pd.DataFrame()
 
         # initialize logger
         self._logging_options = config["logging_options"]
         self._logger = get_logger(name="finvasia_broker", **self._logging_options)
+        self._current_positions = {'buy': None, 'sell': None}
 
     def __repr__(self):
         return "AutoTrader-Finvasia Broker Interface"
@@ -102,30 +102,57 @@ class Broker(Broker):
 
         # Call order to set order time
         order()
+        exchange, _, tradingSym = self._get_token_for_symbol(order.instrument)
+        order.instrument = tradingSym
+        order.exchange = exchange
 
-        self._logger.error(f'Request received to place order -> {order}')
-        # todo: Implement order processing
-        return NotImplementedError("Order processing is not enabled yet")
+        lot_size = int(self._get_qty_for_token(tradingSym, exchange))
+
+        side = "buy" if order.direction > 0 else "sell"
+        reverse = "sell" if side is "buy" else "buy"
+        # check if we already have a position open. In this case, a reverse side order will just close the current
+        # position and will not enter a new position. However, we want to close the previous position and enter
+        # on the reverse side.
+
+        # this doesn't handle error scenario. The bot might ask for a reverse trade, but the trade might not
+        # happen, and we can go in huge losses. The next time similar order goes on, it will just average.
+        # we need to add stop loss order as well which is currently not supported by ccxt.
+        if self._current_positions[reverse] is not None:
+            order.size *= 2
+
+        if self._current_positions[side] is not None:
+            self._logger.info(f"A position on {side} side is already pending, skipping this order")
+            return None
+
+        self._logger.error(f'Request received to place order -> {order}, lotSize = {lot_size}')
+        # return NotImplementedError("Order processing is not enabled yet")
 
         # Submit order
-        # if order.order_type == "close":
-        #     response = self._close_position(order.instrument)
-        # elif order.order_type == "modify":
-        #     response = self._modify_trade(order)
-        # else:
-        #     # for market/limit/stop-limit
-        #     fin_order = self.order_to_finvasia_order(order)
-        #     response = self.api.place_order(self,
-        #                                     buy_or_sell=fin_order['buy_or_sell'],
-        #                                     price_type=fin_order['price_type'],
-        #                                     quantity=fin_order['quantity'],
-        #                                     price=fin_order['price'],
-        #                                     exchange=order.exchange,
-        #                                     trigger_price=fin_order['trigger_price'])
-        #     response = self.finvasia_res_to_order(order, response)
-        #     print("Order type not recognised.")
-        #
-        # return response
+        if order.order_type == "close":
+            response = self._close_position(order.instrument)
+        elif order.order_type == "modify":
+            response = self._modify_trade(order)
+        else:
+            # for market/limit/stop-limit
+            fin_order = self.order_to_finvasia_order(order)
+            response = self.api.place_order(fin_order['buy_or_sell'],
+                                            'M',
+                                            order.exchange,
+                                            order.instrument,
+                                            fin_order['quantity'] * lot_size,
+                                            fin_order['quantity'] * lot_size,
+                                            fin_order['price_type'],
+                                            fin_order['price'],
+                                            fin_order['trigger_price'])
+            try:
+                if response['stat'] == 'Ok':
+                    self._current_positions[side] = 1
+                    self._current_positions[reverse] = None
+            except:
+                self._logger.error("Failed to place order")
+
+            response = self.finvasia_res_to_order(order, response)
+        return response
 
     def get_orders(self, instrument=None, **kwargs) -> dict:
         """Get all pending orders in the account."""
@@ -242,15 +269,18 @@ class Broker(Broker):
         """
 
         self._check_connection()
-        instrument = str(self.nseData[self.nseData['TradingSymbol'] == instrument]['Token'].values[0])
-
+        exchange, instrument, _ = self._get_token_for_symbol(instrument)
         granularity = pd.Timedelta(granularity).total_seconds()
+
+
         if granularity < 60:
             throw_error("Minimum timeframe is 1Min (60s). Supported timeframes are [1, 3, 5, 10, 15, 30, 60, 120, 240] in minutes")
         elif granularity >60:
             granularity = str(int(granularity/60))
+        else:
+            granularity = str(int(granularity/60))
 
-        self._logger.info(f"Getting candle data for {instrument} with timeframe = {granularity} ")
+        self._logger.info(f"Getting candle data for {instrument} in {exchange} with timeframe = {granularity} ")
 
         if count is not None:
             # either of count, start_time+count, end_time+count (or start_time+end_time+count)
@@ -258,7 +288,7 @@ class Broker(Broker):
             if start_time is None and end_time is None:
                 end_time = datetime.now()
                 start_time = end_time - timedelta(days=count)
-                response = self.api.get_time_price_series(exchange='NSE',
+                response = self.api.get_time_price_series(exchange=exchange,
 
                                                           token=instrument, starttime=start_time.timestamp(),
                                                           endtime=end_time.timestamp(), interval=granularity)
@@ -266,14 +296,14 @@ class Broker(Broker):
             elif start_time is not None and end_time is None:
                 # start_time + count
                 from_time = start_time.timestamp()
-                response = self.api.get_time_price_series(exchange='NSE', token=instrument, starttime=from_time, interval=granularity)
+                response = self.api.get_time_price_series(exchange=exchange, token=instrument, starttime=from_time, interval=granularity)
                 data = self._response_to_df(response)
 
             elif end_time is not None and start_time is None:
                 # end_time + count
                 to_time = end_time.timestamp()
                 from_time = end_time - timedelta(days=count)
-                response = self.api.get_time_price_series(exchange='NSE', token=instrument, starttime=from_time.timestamp(),
+                response = self.api.get_time_price_series(exchange=exchange, token=instrument, starttime=from_time.timestamp(),
                                                           endtime=to_time, interval=granularity)
                 data = self._response_to_df(response)
 
@@ -281,7 +311,7 @@ class Broker(Broker):
                 from_time = start_time.timestamp()
                 to_time = end_time.timestamp()
                 # try to get data
-                response = self.api.get_time_price_series(exchange='NSE', token=instrument,
+                response = self.api.get_time_price_series(exchange=exchange, token=instrument,
                                                           starttime=from_time,
                                                           endtime=to_time, interval=granularity)
 
@@ -303,9 +333,9 @@ class Broker(Broker):
 
             self._logger.info(f"Getting candle data for {instrument} timeframe = {granularity} from = {start_time} to = {end_time}")
             # try to get data
-            response = self.api.get_time_price_series( exchange='NSE', token=str(instrument),
-                                                      starttime=from_time,
-                                                      endtime=to_time, interval=granularity)
+            response = self.api.get_time_price_series( exchange=exchange, token=str(instrument),
+                                                       starttime=from_time,
+                                                       endtime=to_time, interval=granularity)
 
             # If the request is rejected, max candles likely exceeded
             if response is None:
@@ -319,17 +349,18 @@ class Broker(Broker):
         """todo: To implement get_quotes() method for the instrument.
         We need to call get_quotes method to fetch the quote details buy and sell bids for the instrument.
         """
-        instrument = self.nseData[self.nseData['TradingSymbol'] == instrument]['Token'].values[0]
-        response = self.api.get_quotes( exchange='NSE', token=instrument)
+        exchange, instrument, _ = self._get_token_for_symbol(instrument)
+        # self.nseData[self.nseData['TradingSymbol'] == instrument]['Token'].values[0]
+        response = self.api.get_quotes( exchange=exchange, token=str(instrument))
         if response['stat'] != 'Ok':
             return throw_error(f'Error Receiving quotes for instrument {instrument}')
 
-        orderbook = {}
+        orderbook = {"bids":[], "asks":[]}
         for i in range(1, 5):
             orderbook["bids"].append({"price": response[f'bp{i}'], "size":response[f'bq{i}']})
             orderbook["asks"].append({"price": response[f'sp{i}'], "size":response[f'sq{i}']})
 
-        return orderbook
+        return OrderBook(instrument, orderbook)
 
     def get_public_trades(self, *args, **kwargs):
         """Get the public trade history for an instrument."""
@@ -421,12 +452,13 @@ class Broker(Broker):
                 import pyotp
                 self._logger.info("Attempting to login using specified credentials")
                 login = self.api.login( userid=self.userName, password=self.password,
-                                       twoFA=pyotp.TOTP(self.totpKey, interval=self.totpInterval).now(),
-                                       vendor_code=self.vendorCode, api_secret=self.apiKey, imei=self.imei)
+                                        twoFA=pyotp.TOTP(self.totpKey, interval=self.totpInterval).now(),
+                                        vendor_code=self.vendorCode, api_secret=self.apiKey, imei=self.imei)
                 self.isLoggedIn = login['stat'] == "Ok"
                 self._logger.info(f'Login result = {self.isLoggedIn}')
                 if self.isLoggedIn:
                     self._read_nse_master()
+                    self._read_nfo_master()
 
                 return
 
@@ -861,6 +893,36 @@ class Broker(Broker):
         self._logger.info(self.nseData.head())
         self._logger.info("---------------------------------NSE MASTER END-------------------------------------------")
 
+    def _read_nfo_master(self):
+        from datetime import date
+        from pathlib import Path
+        import requests
+        from zipfile import ZipFile
+        from io import BytesIO
+
+        self._logger.info("Reading NFO Master")
+        filename = f'NFO_{str(date.today())}.txt'
+        if Path(filename).is_file():
+            self.nfoData = pd.read_csv(filename)
+        else:
+            r = requests.get("https://api.shoonya.com/NFO_symbols.txt.zip")
+            files = ZipFile(BytesIO(r.content))
+            self.nseData = pd.read_csv(files.open("NFO_symbols.txt"))
+            self.nseData.to_csv(filename, index=False, header=True)
+
+        self.nfoData['Expiry'] = pd.to_datetime(self.nfoData['Expiry'], format="%d-%b-%Y")
+        self.nfoData.sort_values(by='Expiry', inplace=True)
+
+        # removed unnamed
+        self.nfoData = self.nfoData.loc[:, ~self.nfoData.columns.str.contains('^Unnamed')]
+        # Finvasia packages some TEST symbols in the master data, exclude them as well.
+        self.nfoData = self.nfoData[~self.nfoData.Symbol.str.contains("NSETEST")]
+        # Get only EQ or Index
+        self._logger.info("NFO Master read -> ")
+        self._logger.info("---------------------------------NFO MASTER START-----------------------------------------")
+        self._logger.info(self.nfoData.head())
+        self._logger.info("---------------------------------NFO MASTER END-------------------------------------------")
+
 
     def _get_my_orders(self, status:str) -> dict:
         self._check_connection()
@@ -871,3 +933,26 @@ class Broker(Broker):
             orders[native_order.id] = native_order
         final_orders = {k: v for k, v in orders.items() if v.status == status }
         return final_orders
+
+    def _get_token_for_symbol(self, instrument):
+        try:
+            exchange = instrument.split('|')[0]
+            instrument = instrument.split('|')[1]
+        except:
+            exchange = 'NSE'
+
+        if exchange is 'NSE':
+            instrument = str(self.nseData[self.nseData['TradingSymbol'] == instrument]['Token'].values[0])
+            tradingsymbol = instrument
+        else:
+            futures_list = self.nfoData[
+                (self.nfoData['Symbol'] == instrument) & (self.nfoData['Instrument'] == 'FUTIDX')]
+            instrument = str(futures_list['Token'].values[0])
+            tradingsymbol = str(futures_list['TradingSymbol'].values[0])
+
+        return exchange, instrument, tradingsymbol
+
+    def _get_qty_for_token(self, tradingSymbol, exchange='NFO'):
+        return 1 \
+            if exchange is 'NSE' \
+            else self.nfoData[self.nfoData['TradingSymbol'] == tradingSymbol]['LotSize'].values[0]
