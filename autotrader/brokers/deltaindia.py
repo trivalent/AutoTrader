@@ -270,9 +270,6 @@ class Broker(Broker):
         if config.get("sandbox_mode", False):
             self.api.set_sandbox_mode(True)
             self._sandbox_str = " (sandbox mode)"
-        elif config.get("environment") != "live":
-            self.api.set_sandbox_mode(True)
-            self._sandbox_str=  " (sandbox mode)"
 
         # Load markets
         self._logger.info(f"Loading instruments for {self.exchange}.")
