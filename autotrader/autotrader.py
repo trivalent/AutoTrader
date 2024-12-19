@@ -1081,7 +1081,7 @@ class AutoTrader:
                     sys.exit()
 
                 # Check broker
-                supported_exchanges = ["virtual", "oanda", "ib", "ccxt", "dydx", "finvasia", "deltaindia"]
+                supported_exchanges = ["virtual", "oanda", "ib", "ccxt", "dydx", "finvasia"]
                 inputted_brokers = self._broker_name.lower().replace(" ", "").split(",")
                 for broker in inputted_brokers:
                     if broker.split(":")[0] not in supported_exchanges:
