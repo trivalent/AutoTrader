@@ -281,6 +281,16 @@ class DeltaWSData:
         msg_hash = hmac.new(secret, message, hashlib.sha256)
         return msg_hash.hexdigest()
 
+    def has_same_side_position(self, instrument, side) -> bool:
+        self._logger.info(f"Checking for an existing position for {instrument} on {side} side")
+        if not self._positions:
+            return False
+        if instrument in self._positions:
+            if self._positions[instrument]['side'] == side:
+                return True
+
+        return False
+
     def get_time_stamp(self):
         # d = datetime.utcnow()
         # epoch = datetime(1970, 1, 1)
@@ -295,7 +305,7 @@ class DeltaWSData:
             self._orders.index.name='id'
             return
 
-        self._logger.debug(f'Received order response from websocket with order id = {data['id']} action = {data['action']}')
+        self._logger.debug(f"Received order response from websocket with order id = {data['id']} action = {data['action']}")
         # we are deleting metadata since we don't need it
         new_order = pd.DataFrame([data])
         new_order.set_index('id', inplace=True, drop=True)
@@ -346,15 +356,16 @@ class DeltaWSData:
     def _parse_price_updates(self, data: dict):
         symbol = data['symbol']
         spot_price = float(data['spot_price'])
+        mark_price = float(data['mark_price'])
         best_buy = data['quotes']['best_bid'] # The best bid price (the highest price a buyer is willing to pay)
         best_sell = data['quotes']['best_ask'] #The best ask price (the lowest price at which the asset is being offered)
-        self._instrument_price_data[symbol] = {'spot_price': spot_price, 'best_buy': best_buy, 'best_sell': best_sell}
+        self._instrument_price_data[symbol] = {'spot_price': spot_price, 'best_buy': best_buy, 'best_sell': best_sell, 'mark_price': mark_price}
         self._logger.debug(f'Update price information for {symbol} ->> {self._instrument_price_data[symbol]}')
 
         if symbol in self._positions:
             contract_size = 0.001 if symbol == 'BTCUSD' else 0.01  # 0.01 for ETHUSD, we can't find an API for this
-            side, percent = _get_pnl_percent(contract_size, spot_price, self._positions[symbol])
-            self._logger.info(f"{side} position is {symbol} is running at {"profit" if percent > 0 else "loss" } of {percent:.2f}%")
+            side, percent = _get_pnl_percent(contract_size, mark_price, self._positions[symbol])
+            self._logger.info(f"{side} position is {symbol} is running at {'profit' if percent > 0 else 'loss' } of {percent:.2f}%")
             if percent < 0 and abs(percent) >= abs(self._loss_percent*0.2):
                 timestamp = self.get_time_stamp()
                 self.ws.send(json.dumps({
@@ -371,7 +382,7 @@ class DeltaWSData:
                         "method": "post/orders",
                         "params": {
                             "product_symbol": symbol,
-                            "side": f"{"sell" if side == 'buy' else "buy"}",
+                            "side": f"{'sell' if side == 'buy' else 'buy'}",
                             "order_type": "market_order",
                             "size": self._positions[symbol]['qty']
                         },
@@ -586,15 +597,18 @@ class Broker(Broker):
             # this doesn't handle error scenario. The bot might ask for a reverse trade, but the trade might not
             # happen, and we can go in huge losses. The next time similar order goes on, it will just average.
             # we need to add stop loss order as well which is currently not supported by ccxt.
-            if self._current_positions[reverse] is not None:
-                order.size *=2
+            #if self._current_positions[reverse] is not None:
+            #    order.size *=2
 
-            self.api.close_all_positions()
+            #self.api.close_all_positions()
 
-            if self._current_positions[side] is not None:
-                self._logger.info(f"A position on {side} side is already pending, skipping this order")
-                return None
+            #if self._current_positions[side] is not None:
+            #    self._logger.info(f"A position on {side} side is already pending, skipping this order")
+            #    return None
 
+            if self._ws.has_same_side_position(order.instrument, side):
+                self._logger.info(f"A position on {side} is already open, skip this order")
+                return
             # Submit the order
             try:
                 placed_order = self.api.create_order(
@@ -1246,4 +1260,5 @@ class Broker(Broker):
             ticksize = float(market["info"]["filters"][0]["tickSize"])
         except:
             raise Exception("Cannot retrieve ticksize.")
+
         return ticksize
