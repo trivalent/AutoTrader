@@ -390,6 +390,8 @@ class DeltaWSData:
                     }
                 }
                 self.ws.send(json.dumps(msg))
+                #delete this position from the records as well, otherwise it may trigger another order.
+                del self._positions[symbol]
             if percent > 0 and abs(percent) >= abs(self._tsl_activate):
                 timestamp = self.get_time_stamp()
                 self.ws.send(json.dumps({
