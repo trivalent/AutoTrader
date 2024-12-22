@@ -1,11 +1,19 @@
+import asyncio
+import hashlib
+import hmac
+import json
+import threading
 import time
+from datetime import datetime, timezone, timedelta
+
 import ccxt
 import pandas as pd
-from datetime import datetime, timezone, timedelta
-from autotrader.utilities import get_logger
+import websocket
+
 from autotrader.brokers.broker import Broker
-from autotrader.brokers.trading import OrderBook
 from autotrader.brokers.trading import Order, Trade, Position
+from autotrader.brokers.trading import OrderBook
+from autotrader.utilities import get_logger
 
 
 class DeltaIndia(ccxt.delta):
@@ -243,6 +251,242 @@ class DeltaIndia(ccxt.delta):
         })
 
 
+def _get_pnl_percent(contract_size, spot_price, position_detail):
+    entryprice = position_detail['price']
+    side = position_detail['side']
+    qty = position_detail['qty']
+    gap = spot_price - entryprice
+    percent = (-1 if side == 'sell' else 1) * (gap * contract_size / position_detail['invested']) * 100
+    return side, percent
+
+
+class DeltaWSData:
+    def __init__(self, config: dict)-> None:
+        self._key = config['api_key']
+        self._secret = config['secret']
+
+        self._logger = get_logger(name="DeltaWS", **config["logging_options"])
+        self._logger.info("Initializing Delta Web Socket for Data collection")
+        self._subscribed_instr = {'Ticker': [], 'Positions': [], 'Spot': [], 'Order': []} # maintain subscribed instruments
+        self._url = config['ws_url']
+        self._orders = pd.DataFrame()
+        self._instrument_price_data = dict()
+        self._positions = dict()
+        self._loss_percent = float(config['LOSS'])
+        self._tsl_activate = float(config['TSL_ACTIVATE'])
+
+    def generate_signature(self, message):
+        message = bytes(message, 'utf-8')
+        secret = bytes(self._secret, 'utf-8')
+        msg_hash = hmac.new(secret, message, hashlib.sha256)
+        return msg_hash.hexdigest()
+
+    def get_time_stamp(self):
+        # d = datetime.utcnow()
+        # epoch = datetime(1970, 1, 1)
+        # return str(int((d - epoch).total_seconds()))
+        return str(time.time())
+
+    async def _parse_orders(self, data: dict):
+        if data['action'] == 'snapshot':
+            self._logger.info(f'This is a snapshot')
+            self._orders = pd.DataFrame(data['result'])
+            self._orders.set_index('id', inplace=True, drop=True)
+            self._orders.index.name='id'
+            return
+
+        self._logger.debug(f'Received order response from websocket with order id = {data['id']} action = {data['action']}')
+        # we are deleting metadata since we don't need it
+        new_order = pd.DataFrame([data])
+        new_order.set_index('id', inplace=True, drop=True)
+        new_order.index.name='id'
+        if data['action'] == 'create':
+            self._orders = pd.concat([self._orders, new_order])
+
+        elif data['action'] == 'update':
+            self._orders.update(new_order)
+
+        elif data['action'] == 'delete':
+            self._orders = self._orders.drop(data['id'])
+
+        self._logger.debug("Updated orders list -> ")
+        self._logger.debug(self._orders.tail())
+
+    def prepare_position(self, data) -> dict:
+        entry_price = float(data['entry_price'])
+        size = int(data['size'])
+        side = 'buy' if size > 0 else 'sell'
+        commission = float(data['commission'])
+        liquidation = float(data['liquidation_price'])
+        bankruptcy = float(data['bankruptcy_price'])
+        invested = float(data['margin'])
+        return {'side': side, 'price': entry_price, 'brokerage': commission,
+                'liquidation': liquidation, 'bankruptcy': bankruptcy,
+                'qty': abs(size), 'invested': invested}
+
+    def _parse_positions(self, data: dict):
+        if data['action'] == 'snapshot':
+            data = data['result']
+            for d in data:
+                d['symbol'] = d['product_symbol']
+                self._positions[d['symbol']] = self.prepare_position(d)
+            return
+
+        symbol = data['symbol']
+        if data['action'] == 'create':
+            #a new position is created
+            self._positions[symbol] = self.prepare_position(data)
+
+        elif data['action'] == 'delete':
+            #position is closed
+            del self._positions[symbol]
+
+        self._logger.debug(f'Available positions -> {self._positions}')
+
+    def _parse_price_updates(self, data: dict):
+        symbol = data['symbol']
+        spot_price = float(data['spot_price'])
+        best_buy = data['quotes']['best_bid'] # The best bid price (the highest price a buyer is willing to pay)
+        best_sell = data['quotes']['best_ask'] #The best ask price (the lowest price at which the asset is being offered)
+        self._instrument_price_data[symbol] = {'spot_price': spot_price, 'best_buy': best_buy, 'best_sell': best_sell}
+        self._logger.debug(f'Update price information for {symbol} ->> {self._instrument_price_data[symbol]}')
+
+        if symbol in self._positions:
+            contract_size = 0.001 if symbol == 'BTCUSD' else 0.01  # 0.01 for ETHUSD, we can't find an API for this
+            side, percent = _get_pnl_percent(contract_size, spot_price, self._positions[symbol])
+            self._logger.info(f"{side} position is {symbol} is running at {"profit" if percent > 0 else "loss" } of {percent:.2f}%")
+            if percent < 0 and abs(percent) >= abs(self._loss_percent*0.2):
+                timestamp = self.get_time_stamp()
+                self.ws.send(json.dumps({
+                    "type": "auth",
+                    "payload": {
+                        "api-key": self._key,
+                        "signature": self.generate_signature('POST' + timestamp + "/orders"),
+                        "timestamp": timestamp
+                    }
+                }))
+                msg = {
+                    "type": "rpc",
+                    "payload": {
+                        "method": "post/orders",
+                        "params": {
+                            "product_symbol": symbol,
+                            "side": f"{"sell" if side == 'buy' else "buy"}",
+                            "order_type": "market_order",
+                            "size": self._positions[symbol]['qty']
+                        },
+                        "id": str(timestamp)
+                    }
+                }
+                self.ws.send(json.dumps(msg))
+            if percent > 0 and abs(percent) >= abs(self._tsl_activate):
+                timestamp = self.get_time_stamp()
+                self.ws.send(json.dumps({
+                    "type": "auth",
+                    "payload": {
+                        "api-key": self._key,
+                        "signature": self.generate_signature('POST' + timestamp + "/orders/bracket"),
+                        "timestamp": timestamp
+                    }
+                }))
+                msg = {
+                    "type": "rpc",
+                    "payload": {
+                        "method": "post/orders/bracket",
+                        "params": {
+                            "product_symbol": symbol,
+                            "stop_loss_order": {
+                            "trail_amount": f"{-100 if side == 'sell' else 100}",
+                            },
+                        },
+                        "id": str(timestamp)
+                    }
+                }
+                self.ws.send(json.dumps(msg))
+    def on_message(self, _, message):
+        data = json.loads(message)
+        self._logger.debug(f'On message received -> {data}')
+        if data['type'] == 'orders':
+            asyncio.run(self._parse_orders(data))
+        elif data['type'] == 'positions':
+            self._parse_positions(data)
+        elif data['type'] == 'v2/ticker':
+            self._parse_price_updates(data)
+
+    def on_error(self, _, error):
+        self._logger.error(f"Websocket error occurred {error}")
+
+    def on_open(self, p1):
+        self._logger.info(f"Web socket opened {p1}")
+
+    def on_close(self, _, p1, p2):
+        self._logger.info(f"Web socket closed -> {p1} :: {p2}")
+
+    def subscribe_ticker(self, instrument:str) -> bool:
+        self._logger.info(f'Subscribing to instrument {instrument}')
+        return self._subscribe(instrument, 'Ticker')
+
+    def subscribe_positions(self, instrument: str) -> bool:
+        self._logger.info(f'Subscribing for position updates for {instrument}')
+        return self._subscribe(instrument, 'Positions')
+
+    def subscribe_spot(self, instrument) -> bool:
+        self._logger.info(f'Subscribing for spot price updates for {instrument}')
+        return self._subscribe(instrument, 'Spot')
+
+    def subscribe_orderbook(self, instrument) -> bool:
+        self._logger.info(f'Subscribing for order book updates for {instrument}')
+        return self._subscribe(instrument, 'Order')
+
+    def _subscribe(self, instrument: str, type: str) -> bool:
+        if instrument in self._subscribed_instr[type]:
+            return True
+
+        msg = {'type': "subscribe", 'payload': {'channels':[]}}
+        need_authorization = False
+        method = ""
+        if type == 'Ticker':
+            msg['payload']['channels'].append({'name': 'v2/ticker', "symbols": [instrument]})
+
+        elif type == 'Positions':
+            msg['payload']['channels'].append({'name' : 'positions', "symbols": [instrument]})
+            method="/live"
+            need_authorization = True
+
+        elif type == 'Spot':
+            msg['payload']['channels'].append({'name': 'v2/spot', "symbols": [instrument]})
+
+        elif type == 'Order':
+            method="/live"
+            msg['payload']['channels'].append({'name': 'orders', "symbols": ["all"]})
+            need_authorization = True
+
+        try:
+            if need_authorization:
+                timestamp = self.get_time_stamp()
+                self.ws.send(json.dumps({
+                    "type": "auth",
+                    "payload": {
+                        "api-key": self._key,
+                        "signature": self.generate_signature('GET' + timestamp + method),
+                        "timestamp": timestamp
+                    }
+                }))
+
+            self.ws.send(json.dumps(msg))
+            self._subscribed_instr[type].append(instrument)
+            return True
+        except Exception as e:
+            self._logger.error(f'Error subscribing to instrument {instrument} of type {type} -> {e}')
+
+        return False
+
+    def start(self):
+        self.ws = websocket.WebSocketApp(self._url, on_message=self.on_message,
+                                         on_error=self.on_error, on_close=self.on_close, on_open=self.on_open)
+        self.thread = threading.Thread(target=self.ws.run_forever)
+        self.thread.start()
+
 class Broker(Broker):
     def __init__(self, config: dict) -> None:
         """AutoTrader Broker Class constructor."""
@@ -264,6 +508,8 @@ class Broker(Broker):
 
         # Instantiate exchange connection
         self.api: ccxt.Exchange = DeltaIndia(ccxt_config)
+        self._ws = DeltaWSData(config)
+        self._ws.start()
 
         # Set sandbox mode
         self._sandbox_str = ""
@@ -284,9 +530,9 @@ class Broker(Broker):
 
     def __repr__(self):
         return (
-            f"AutoTrader-{self.exchange[0].upper()}"
-            + f"{self.exchange[1:].lower()} interface"
-            + self._sandbox_str
+                f"AutoTrader-{self.exchange[0].upper()}"
+                + f"{self.exchange[1:].lower()} interface"
+                + self._sandbox_str
         )
 
     def __str__(self):
@@ -332,7 +578,7 @@ class Broker(Broker):
         else:
             # Regular order
             side = "buy" if order.direction > 0 else "sell"
-            reverse = "sell" if side is "buy" else "buy"
+            reverse = "sell" if side == "buy" else "buy"
             #check if we already have a position open. In this case, a reverse side order will just close the current
             # position and will not enter a new position. However, we want to close the previous position and enter
             # on the reverse side.
@@ -342,6 +588,8 @@ class Broker(Broker):
             # we need to add stop loss order as well which is currently not supported by ccxt.
             if self._current_positions[reverse] is not None:
                 order.size *=2
+
+            self.api.close_all_positions()
 
             if self._current_positions[side] is not None:
                 self._logger.info(f"A position on {side} side is already pending, skipping this order")
@@ -367,7 +615,7 @@ class Broker(Broker):
         return placed_order
 
     def get_orders(
-        self, instrument: str = None, order_status: str = "open", **kwargs
+            self, instrument: str = None, order_status: str = "open", **kwargs
     ) -> dict[str, Order]:
         """Returns orders associated with the account."""
         for _ in range(2):
@@ -552,6 +800,10 @@ class Broker(Broker):
         data : DataFrame
             The price data, as an OHLCV DataFrame.
         """
+        self._ws.subscribe_positions(instrument)
+        self._ws.subscribe_ticker(instrument)
+        self._ws.subscribe_orderbook(instrument)
+
         # Check requested start and end times
         if end_time is not None and end_time > datetime.now(tz=end_time.tzinfo):
             raise Exception("End time cannot be later than the current time.")
@@ -580,7 +832,7 @@ class Broker(Broker):
                     + (end_ts - start_ts)
                     / pd.Timedelta(granularity).total_seconds()
                     / 1000,
-                )
+                    )
                 raw_data = self.api.fetch_ohlcv(
                     instrument,
                     timeframe=granularity,
@@ -649,7 +901,7 @@ class Broker(Broker):
         return data
 
     def get_orderbook(
-        self, instrument: str, limit: int = None, params: dict = None, **kwargs
+            self, instrument: str, limit: int = None, params: dict = None, **kwargs
     ) -> OrderBook:
         """Returns the orderbook"""
         params = params if params else {}
@@ -667,12 +919,12 @@ class Broker(Broker):
         return OrderBook(instrument, orderbook)
 
     def get_public_trades(
-        self,
-        instrument: str,
-        since: int = None,
-        limit: int = None,
-        params: dict = None,
-        **kwargs,
+            self,
+            instrument: str,
+            since: int = None,
+            limit: int = None,
+            params: dict = None,
+            **kwargs,
     ):
         """Get the public trade history for an instrument."""
         params = params if params else {}
@@ -705,12 +957,12 @@ class Broker(Broker):
         return fr_dict
 
     def _ccxt_funding_history(
-        self,
-        instrument: str,
-        count: int = None,
-        start_time: datetime = None,
-        end_time: datetime = None,
-        params: dict = None,
+            self,
+            instrument: str,
+            count: int = None,
+            start_time: datetime = None,
+            end_time: datetime = None,
+            params: dict = None,
     ):
         """Fetches the funding rate history."""
         params = params if params else {}

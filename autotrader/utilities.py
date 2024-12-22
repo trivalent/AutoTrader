@@ -221,6 +221,9 @@ def get_broker_config(
                 "data_source": "deltaindia",
                 "api_key":global_config[broker_key.lower()]['api_key'],
                 "secret":global_config[broker_key.lower()]['secret'],
+                "ws_url":global_config[broker_key.lower()]['ws_url'],
+                "LOSS":global_config[broker_key.lower()]['LOSS'],
+                "TSL_ACTIVATE":global_config[broker_key.lower()]['TSL_ACTIVATE'],
                 "sandbox_mode": sandbox_mode,
                 "base_currency": "USDT",
             }

@@ -436,6 +436,13 @@ class AutoTrader:
                 )
                 sys.exit(0)
 
+            try:
+                self._strategy_timestep = pd.Timedelta(new_strategy["PERIOD"]).to_pytimedelta()
+            except:
+                print(
+                    f"Strategy configuration doesn't specify PERIOD. The strategy will update at the INTERVAL level"
+                )
+
             if self._strategy_timestep is None:
                 # Timestep hasn't been set yet; set it
                 self._strategy_timestep = strat_granularity
