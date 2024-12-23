@@ -257,7 +257,7 @@ def _get_pnl_percent(contract_size, spot_price, position_detail):
     qty = position_detail['qty']
     gap = spot_price - entryprice
     percent = (-1 if side == 'sell' else 1) * (gap * contract_size / position_detail['invested']) * 100
-    return side, percent
+    return side, percent, entryprice
 
 
 class DeltaWSData:
@@ -331,7 +331,7 @@ class DeltaWSData:
         invested = float(data['margin'])
         return {'side': side, 'price': entry_price, 'brokerage': commission,
                 'liquidation': liquidation, 'bankruptcy': bankruptcy,
-                'qty': abs(size), 'invested': invested}
+                'qty': abs(size), 'invested': invested, 'tsl_set': False}
 
     def _parse_positions(self, data: dict):
         if data['action'] == 'snapshot':
@@ -363,7 +363,7 @@ class DeltaWSData:
 
         if symbol in self._positions:
             contract_size = 0.001 if symbol == 'BTCUSD' else 0.01  # 0.01 for ETHUSD, we can't find an API for this
-            side, percent = _get_pnl_percent(contract_size, mark_price, self._positions[symbol])
+            side, percent, entry_price = _get_pnl_percent(contract_size, mark_price, self._positions[symbol])
             if percent < 0 and abs(percent) >= abs(self._loss_percent*0.8):
                 self._logger.info(f"{side} position in {symbol} is running at {'profit' if percent > 0 else 'loss'} of {percent:.2f}%. Exiting position")
                 timestamp = self.get_time_stamp()
@@ -392,7 +392,12 @@ class DeltaWSData:
                 #delete this position from the records as well, otherwise it may trigger another order.
                 del self._positions[symbol]
             if percent > 0 and abs(percent) >= abs(self._tsl_activate * 0.9):
-                self._logger.info(f"{side} position in {symbol} is running at {'profit' if percent > 0 else 'loss'} of {percent:.2f}%. Adding TSL")
+                if self._positions[symbol]['tsl_set']:
+                    self._logger.info("TSL already set for this position")
+                    return
+
+                tsl_price_gap = 5 + abs(entry_price - mark_price)/2
+                self._logger.info(f"{side} position in {symbol} is running at {'profit' if percent > 0 else 'loss'} of {percent:.2f}%. Adding TSL at {tsl_price_gap}")
                 timestamp = self.get_time_stamp()
                 self.ws.send(json.dumps({
                     "type": "auth",
@@ -409,15 +414,15 @@ class DeltaWSData:
                         "params": {
                             "product_symbol": symbol,
                             "stop_loss_order": {
-                                "trail_amount": f"{100 if side == 'sell' else -100}",
+                                "trail_amount": f"{tsl_price_gap if side == 'sell' else -tsl_price_gap}",
                                 "order_type":"market_order",
                                 "bracket_stop_trigger_method":"mark_price",
-
                             },
                         },
                         "id": str(timestamp)
                     }
                 }
+                self._positions[symbol]['tsl_set'] = True
                 self.ws.send(json.dumps(msg))
     def on_message(self, _, message):
         data = json.loads(message)
