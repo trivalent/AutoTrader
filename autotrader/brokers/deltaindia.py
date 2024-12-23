@@ -409,7 +409,10 @@ class DeltaWSData:
                         "params": {
                             "product_symbol": symbol,
                             "stop_loss_order": {
-                            "trail_amount": f"{-100 if side == 'sell' else 100}",
+                                "trail_amount": f"{-100 if side == 'sell' else 100}",
+                                "order_type":"market_order",
+                                "bracket_stop_trigger_method":"mark_price",
+
                             },
                         },
                         "id": str(timestamp)
@@ -427,7 +430,9 @@ class DeltaWSData:
             self._parse_price_updates(data)
 
     def on_error(self, _, error):
-        self._logger.error(f"Websocket error occurred {error}")
+        self._logger.exception("Websocket error occurred", error)
+        self._logger.error(f"Exception details -> {repr(error)}")
+        print(error)
 
     def on_open(self, p1):
         self._logger.info(f"Web socket opened {p1}")
