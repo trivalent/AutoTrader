@@ -409,7 +409,7 @@ class DeltaWSData:
                         "params": {
                             "product_symbol": symbol,
                             "stop_loss_order": {
-                                "trail_amount": f"{-100 if side == 'sell' else 100}",
+                                "trail_amount": f"{100 if side == 'sell' else -100}",
                                 "order_type":"market_order",
                                 "bracket_stop_trigger_method":"mark_price",
 
