@@ -319,8 +319,7 @@ class DeltaWSData:
         elif data['action'] == 'delete':
             self._orders = self._orders.drop(data['id'])
 
-        self._logger.debug("Updated orders list -> ")
-        self._logger.debug(self._orders.tail())
+        self._logger.debug(f"Updated orders list -> {self._orders.to_json()}")
 
     def prepare_position(self, data) -> dict:
         entry_price = float(data['entry_price'])
@@ -365,8 +364,8 @@ class DeltaWSData:
         if symbol in self._positions:
             contract_size = 0.001 if symbol == 'BTCUSD' else 0.01  # 0.01 for ETHUSD, we can't find an API for this
             side, percent = _get_pnl_percent(contract_size, mark_price, self._positions[symbol])
-            self._logger.info(f"{side} position is {symbol} is running at {'profit' if percent > 0 else 'loss' } of {percent:.2f}%")
-            if percent < 0 and abs(percent) >= abs(self._loss_percent*0.2):
+            if percent < 0 and abs(percent) >= abs(self._loss_percent*0.8):
+                self._logger.info(f"{side} position in {symbol} is running at {'profit' if percent > 0 else 'loss'} of {percent:.2f}%. Exiting position")
                 timestamp = self.get_time_stamp()
                 self.ws.send(json.dumps({
                     "type": "auth",
@@ -392,7 +391,8 @@ class DeltaWSData:
                 self.ws.send(json.dumps(msg))
                 #delete this position from the records as well, otherwise it may trigger another order.
                 del self._positions[symbol]
-            if percent > 0 and abs(percent) >= abs(self._tsl_activate):
+            if percent > 0 and abs(percent) >= abs(self._tsl_activate * 0.9):
+                self._logger.info(f"{side} position in {symbol} is running at {'profit' if percent > 0 else 'loss'} of {percent:.2f}%. Adding TSL")
                 timestamp = self.get_time_stamp()
                 self.ws.send(json.dumps({
                     "type": "auth",
