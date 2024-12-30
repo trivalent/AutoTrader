@@ -5,6 +5,7 @@ import json
 import threading
 import time
 from datetime import datetime, timezone, timedelta
+from threading import Timer
 
 import ccxt
 import pandas as pd
@@ -262,9 +263,14 @@ def _get_pnl_percent(contract_size, spot_price, position_detail):
 
 class DeltaWSData:
     def __init__(self, config: dict)-> None:
+
+        #Thread running the websocket
+        self.thread = None
+        #The websocket
+        self.ws = None
+
         self._key = config['api_key']
         self._secret = config['secret']
-
         self._logger = get_logger(name="DeltaWS", **config["logging_options"])
         self._logger.info("Initializing Delta Web Socket for Data collection")
         self._subscribed_instr = {'Ticker': [], 'Positions': [], 'Spot': [], 'Order': []} # maintain subscribed instruments
@@ -274,6 +280,17 @@ class DeltaWSData:
         self._positions = dict()
         self._loss_percent = float(config['LOSS'])
         self._tsl_activate = float(config['TSL_ACTIVATE'])
+        self._heartbeat_timer = threading.Timer(35, self._handle_heartbeat_timeout)
+
+    def _handle_heartbeat_timeout(self):
+        try:
+            self.ws.close()
+            self.thread.stop()
+        except Exception as e:
+            self._logger.error(f"Error closing websocket/stopping thread -> {e.__str__()}")
+
+        self.start()
+
 
     def generate_signature(self, message):
         message = bytes(message, 'utf-8')
@@ -424,6 +441,12 @@ class DeltaWSData:
                 }
                 self._positions[symbol]['tsl_set'] = True
                 self.ws.send(json.dumps(msg))
+
+    def _reset_heartbeat_timer(self):
+        self._heartbeat_timer.cancel()
+        self._heartbeat_timer = threading.Timer(35, self._handle_heartbeat_timeout)
+        self._heartbeat_timer.start()
+
     def on_message(self, _, message):
         data = json.loads(message)
         self._logger.debug(f'On message received -> {data}')
@@ -433,6 +456,8 @@ class DeltaWSData:
             self._parse_positions(data)
         elif data['type'] == 'v2/ticker':
             self._parse_price_updates(data)
+        elif data['type'] == 'heartbeat':
+            self._reset_heartbeat_timer()
 
     def on_error(self, _, error):
         self._logger.exception("Websocket error occurred", error)
@@ -441,6 +466,10 @@ class DeltaWSData:
 
     def on_open(self, p1):
         self._logger.info(f"Web socket opened {p1}")
+        # subscribe to heartbeat
+        self.ws.send(json.dumps({
+            "type": "enable_heartbeat"
+        }))
 
     def on_close(self, _, p1, p2):
         self._logger.info(f"Web socket closed -> {p1} :: {p2}")
