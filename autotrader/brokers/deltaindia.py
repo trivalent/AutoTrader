@@ -285,10 +285,11 @@ class DeltaWSData:
     def _handle_heartbeat_timeout(self):
         try:
             self.ws.close()
-            self.thread.stop()
+            self.thread.join()
         except Exception as e:
             self._logger.error(f"Error closing websocket/stopping thread -> {e.__str__()}")
 
+        self._subscribed_instr = {'Ticker': [], 'Positions': [], 'Spot': [], 'Order': []}
         self.start()
 
 
